@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>К-Система: Касса и Банк</title>
-    
+    <title>К-Фреш: POS Система</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
@@ -12,181 +11,223 @@
 
     <style>
         :root {
-            --bg-light: #F2F6F9;
-            --card-gradient: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-            --dark-blue: #2a5298;
-            --accent-green: #27ae60;
-            --text-main: #2C3E50;
-            --white: #FFFFFF;
+            --bg: #F2F6F9;
+            --dark: #1A1A1A;
+            --blue: #2a5298;
+            --green: #27ae60;
+            --white: #ffffff;
         }
+        * { box-sizing: border-box; font-family: 'Inter', sans-serif; }
+        body { margin: 0; background: var(--bg); color: var(--dark); overflow-x: hidden; }
 
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body { margin: 0; font-family: 'Inter', -apple-system, sans-serif; background: var(--bg-light); color: var(--text-main); }
+        /* --- СЕТКА ТОВАРОВ (КАССИР) --- */
+        .pos-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 15px; }
+        .product-btn { 
+            background: var(--white); border: none; padding: 15px; border-radius: 18px; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05); font-weight: 600; text-align: left;
+            display: flex; flex-direction: column;
+        }
+        .product-btn span { font-size: 20px; margin-bottom: 5px; }
 
-        /* --- ЭКРАН КЛИЕНТА (ОПЛАТА) --- */
-        #client-screen {
-            display: none; min-height: 100vh; padding: 25px; flex-direction: column; align-items: center;
+        /* --- ЭКРАН ПОКУПАТЕЛЯ (КЛИЕНТ-ТАБЛО) --- */
+        #display-screen {
+            display: none; height: 100vh; background: var(--white);
+            flex-direction: column; padding: 30px;
         }
-        .bank-header { width: 100%; display: flex; justify-content: space-between; margin-bottom: 30px; font-weight: 900; }
-        
-        .card-visual {
-            width: 100%; max-width: 350px; height: 210px; background: var(--card-gradient);
-            border-radius: 28px; padding: 30px; color: white; position: relative;
-            box-shadow: 0 20px 40px rgba(42, 82, 152, 0.25); margin-bottom: 40px;
+        .bill-card {
+            background: var(--bg); border-radius: 30px; padding: 25px; flex: 1;
+            display: flex; flex-direction: column;
         }
-        .card-chip { width: 50px; height: 38px; background: linear-gradient(135deg, #f1c40f, #f39c12); border-radius: 8px; margin-bottom: 25px; }
-        .pay-val { font-size: 36px; font-weight: 800; }
+        #qr-area { background: white; padding: 15px; border-radius: 20px; margin: 20px auto; width: 180px; }
 
-        .input-box { width: 100%; max-width: 350px; background: white; padding: 30px; border-radius: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.04); }
-        .input-box input {
-            width: 100%; padding: 18px; border-radius: 16px; border: 2px solid #F0F3F7;
-            background: #F8FAFC; font-size: 18px; margin-top: 10px; text-align: center;
+        /* --- ОБЩИЕ ЭЛЕМЕНТЫ --- */
+        .btn-action {
+            width: 100%; padding: 20px; border-radius: 20px; border: none;
+            font-size: 18px; font-weight: 800; cursor: pointer; margin-top: 10px;
         }
-        .btn-confirm {
-            width: 100%; background: var(--dark-blue); color: white; border: none; padding: 20px;
-            border-radius: 18px; font-size: 16px; font-weight: 800; margin-top: 25px; cursor: pointer;
+        .success-overlay {
+            display: none; position: fixed; inset: 0; background: var(--green);
+            color: white; z-index: 1000; align-items: center; justify-content: center;
+            flex-direction: column; text-align: center;
         }
-
-        /* --- ЭКРАН КАССИРА --- */
-        #cashier-screen { display: block; padding: 20px; }
-        .pos-card { background: white; border-radius: 25px; padding: 20px; margin-bottom: 20px; }
-        .terminal-overlay {
-            display: none; position: fixed; inset: 0; background: #000; z-index: 100;
-            flex-direction: column; align-items: center; justify-content: center; color: white;
-        }
-        #qr-code { background: white; padding: 15px; border-radius: 20px; margin: 20px 0; }
-        
-        .pos-btn { background: #E2E8F0; border: none; padding: 15px; border-radius: 15px; font-weight: 600; cursor: pointer; }
     </style>
 </head>
 <body>
 
-    <div id="client-screen">
-        <div class="bank-header">К-ОНЛАЙН <span>● FASTPAY</span></div>
-        
-        <div class="card-visual">
-            <div class="card-chip"></div>
-            <div style="font-size: 12px; opacity: 0.7; text-transform: uppercase;">Сумма к оплате</div>
-            <div class="pay-val" id="client-amount">0.00 ₽</div>
-            <div style="position:absolute; bottom:30px; right:30px; opacity:0.5; font-size:12px;">SECURE TERMINAL</div>
+    <div id="cashier-ui">
+        <div style="padding: 20px; display: flex; justify-content: space-between;">
+            <h2 style="margin:0">К-Фреш Касса</h2>
+            <button onclick="switchToDisplay()" style="border:none; background:none; color:var(--blue);">Экран покупателя ➡️</button>
         </div>
 
-        <div class="input-box">
-            <label style="font-size:12px; font-weight:700; color:#888;">ВАШ TELEGRAM ID</label>
-            <input type="number" id="client-id" placeholder="Напр: 6348425176">
-            <button class="btn-confirm" onclick="payNow()">ПОДТВЕРДИТЬ ОПЛАТУ</button>
+        <div class="pos-grid" id="menu-grid"></div>
+
+        <div style="background:var(--dark); color:white; padding:25px; border-radius:30px 30px 0 0; position:fixed; bottom:0; width:100%;">
+            <div style="display:flex; justify-content:space-between; font-size:24px; font-weight:800; margin-bottom:15px;">
+                <span>Итого:</span> <span id="total-val">0 ₽</span>
+            </div>
+            <button class="btn-action" style="background:var(--blue); color:white;" onclick="startPayment()">ПРИНЯТЬ ОПЛАТУ</button>
+            <button class="btn-action" style="background:#444; color:white; font-size:14px;" onclick="clearCheck()">ОЧИСТИТЬ ЧЕК</button>
         </div>
-        <div style="margin-top:auto; font-size:11px; color:#A0AEC0;">🔒 Encrypted by K-Bank Security Systems</div>
     </div>
 
-    <div id="cashier-screen">
-        <h2 style="margin-bottom:20px;">К-Касса PRO</h2>
-        
-        <div class="pos-card">
-            <div id="cart-list" style="min-height:80px; font-size:14px; color:#666;">Список пуст...</div>
-            <hr style="border:0; border-top:1px solid #eee; margin:15px 0;">
-            <div style="display:flex; justify-content:space-between; font-size:24px; font-weight:800;">
-                Итого: <span id="pos-total">0 ₽</span>
+    <div id="display-screen">
+        <h1>Ваш заказ</h1>
+        <div class="bill-card">
+            <div id="display-items" style="flex:1; overflow-y:auto;"></div>
+            <div style="text-align:center;">
+                <div style="font-size:32px; font-weight:900;" id="display-total">0 ₽</div>
+                <div id="qr-area"></div>
+                <div style="opacity:0.5; font-size:14px;">Отсканируйте К-Банком для оплаты</div>
             </div>
         </div>
-
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
-            <button class="pos-btn" onclick="add('Пицца', 650)">🍕 Пицца</button>
-            <button class="pos-btn" onclick="add('Роллы', 480)">🍣 Роллы</button>
-            <button class="pos-btn" onclick="add('Кофе', 150)">☕ Кофе</button>
-            <button class="pos-btn" onclick="add('Шаурма', 250)">🌯 Шавуха</button>
-        </div>
-
-        <button class="btn-confirm" style="margin-top:20px;" onclick="showQR()">СФОРМИРОВАТЬ QR</button>
     </div>
 
-    <div class="terminal-overlay" id="term-ui">
-        <div style="font-size:14px; opacity:0.6;">ОЖИДАНИЕ ОПЛАТЫ</div>
-        <div id="qr-amount" style="font-size:40px; font-weight:900; margin:10px 0;">0 ₽</div>
-        <div id="qr-code"></div>
-        <p style="text-align:center; padding:0 40px; font-size:14px;">Попросите клиента отсканировать код камерой телефона</p>
-        <button class="pos-btn" style="background:#333; color:white; width:200px;" onclick="location.reload()">ОТМЕНА</button>
+    <div id="success-screen" class="success-overlay">
+        <div style="font-size:80px;">✅</div>
+        <h1 id="success-msg">ОПЛАЧЕНО УСПЕШНО</h1>
+        <div id="print-btns" style="display:none; width:80%;">
+            <button class="btn-action" style="background:white; color:black;" onclick="printReceipt('FunPrint')">Печать FunPrint</button>
+            <button class="btn-action" style="background:white; color:black;" onclick="printReceipt('WalkPrint')">Печать WalkPrint</button>
+            <button class="btn-action" style="background:none; color:white;" onclick="location.reload()">Закрыть</button>
+        </div>
     </div>
 
 <script>
-    // КОНФИГУРАЦИЯ FIREBASE
     const config = { databaseURL: "https://webapp-b7149-default-rtdb.europe-west1.firebasedatabase.app" };
     firebase.initializeApp(config);
     const rtdb = firebase.database();
 
-    let total = 0;
-    let cart = [];
+    const menu = [
+        { n: 'Пицца Пепперони', p: 650, i: '🍕', c: 'pizza' },
+        { n: 'Пицца 4 Сыра', p: 720, i: '🧀', c: 'pizza' },
+        { n: 'Ролл Филадельфия', p: 480, i: '🍣', c: 'rolls' },
+        { n: 'Шаурма XXL', p: 320, i: '🌯', c: 'shaurma' },
+        { n: 'Бургер Шеф', p: 450, i: '🍔', c: 'burgers' },
+        { n: 'Картофель Фри', p: 150, i: '🍟', c: 'side' },
+        { n: 'Капучино', p: 180, i: '☕', c: 'drinks' },
+        { n: 'Кола 0.5', p: 95, i: '🥤', c: 'drinks' },
+        { n: 'Чизкейк', p: 280, i: '🍰', c: 'dessert' },
+        { n: 'Суши Сет', p: 1200, i: '🍱', c: 'rolls' }
+    ];
 
-    // 1. ОПРЕДЕЛЕНИЕ РОЛИ
+    let currentCheck = { items: [], total: 0, status: 'waiting' };
+
+    // ИНИЦИАЛИЗАЦИЯ КАССЫ
     window.onload = () => {
-        const params = new URLSearchParams(window.location.search);
-        const amount = params.get('amount');
+        const grid = document.getElementById('menu-grid');
+        menu.forEach(item => {
+            grid.innerHTML += `
+                <button class="product-btn" onclick="addToCheck('${item.n}', ${item.p})">
+                    <span>${item.i}</span>
+                    <div>${item.n}</div>
+                    <div style="color:var(--blue)">${item.p} ₽</div>
+                </button>`;
+        });
 
-        if (amount) {
-            document.getElementById('cashier-screen').style.display = 'none';
-            document.getElementById('client-screen').style.display = 'flex';
-            document.getElementById('client-amount').innerText = amount + " ₽";
-            window.payTarget = parseInt(amount);
+        // Слушаем изменения чека (для экрана покупателя и статуса оплаты)
+        rtdb.ref('current_check').on('value', (snap) => {
+            const data = snap.val();
+            if(!data) return;
             
-            // Авто-вход через Telegram Mini App
-            if (window.Telegram && window.Telegram.WebApp) {
-                const user = window.Telegram.WebApp.initDataUnsafe.user;
-                if (user) document.getElementById('client-id').value = user.id;
+            updateDisplay(data);
+            
+            if(data.status === 'paid') {
+                showSuccess(true);
             }
-        }
+        });
     };
 
-    // 2. ЛОГИКА КАССЫ
-    function add(n, p) {
-        cart.push(n);
-        total += p;
-        document.getElementById('cart-list').innerText = cart.join(', ');
-        document.getElementById('pos-total').innerText = total + " ₽";
+    function addToCheck(n, p) {
+        currentCheck.items.push({n, p});
+        currentCheck.total += p;
+        sync();
     }
 
-    function showQR() {
-        if (total === 0) return;
-        document.getElementById('term-ui').style.display = 'flex';
-        document.getElementById('qr-amount').innerText = total + " ₽";
+    function sync() {
+        rtdb.ref('current_check').set(currentCheck);
+        document.getElementById('total-val').innerText = currentCheck.total + " ₽";
+    }
+
+    function clearCheck() {
+        currentCheck = { items: [], total: 0, status: 'waiting' };
+        sync();
+    }
+
+    function switchToDisplay() {
+        document.getElementById('cashier-ui').style.display = 'none';
+        document.getElementById('display-screen').style.display = 'flex';
+    }
+
+    // ОБНОВЛЕНИЕ ТАБЛО ПОКУПАТЕЛЯ
+    function updateDisplay(data) {
+        const list = document.getElementById('display-items');
+        const totalDisp = document.getElementById('display-total');
+        const qrArea = document.getElementById('qr-area');
+
+        list.innerHTML = data.items.map(i => `<div style="display:flex; justify-content:space-between; margin-bottom:10px;"><span>${i.n}</span><b>${i.p} ₽</b></div>`).join('');
+        totalDisp.innerText = data.total + " ₽";
+
+        if(data.total > 0 && data.status === 'waiting') {
+            qrArea.innerHTML = '';
+            // Ссылка ведет на форму оплаты клиента (как мы делали раньше)
+            const payLink = window.location.href.split('?')[0] + "?pay=" + data.total;
+            new QRCode(qrArea, { text: payLink, width: 150, height: 150 });
+        }
+    }
+
+    function showSuccess(isPaid) {
+        const screen = document.getElementById('success-screen');
+        screen.style.display = 'flex';
+        // Если это кассир, показываем кнопки печати
+        if(document.getElementById('cashier-ui').style.display !== 'none') {
+            document.getElementById('print-btns').style.display = 'block';
+        }
+    }
+
+    // ОПЛАТА (Имитация или реальная проверка)
+    function startPayment() {
+        // Здесь кассир может сам нажать, если клиент платит наличкой
+        rtdb.ref('current_check').update({ status: 'paid' });
+    }
+
+    // СИСТЕМА ПЕЧАТИ
+    function printReceipt(app) {
+        const date = new Date().toLocaleString();
+        let text = `К-ФРЕШ ЧЕК\n----------\n`;
+        currentCheck.items.forEach(i => text += `${i.n} - ${i.p}р\n`);
+        text += `----------\nИТОГО: ${currentCheck.total}р\nДата: ${date}\nСПАСИБО ЗА ПОКУПКУ!`;
         
-        const link = window.location.href.split('?')[0] + "?amount=" + total;
-        new QRCode(document.getElementById("qr-code"), { text: link, width: 200, height: 200 });
+        window.location.href = (app === 'FunPrint' ? 'funprint' : 'walkprint') + "://print?text=" + encodeURIComponent(text);
+        setTimeout(() => clearCheck(), 2000);
     }
 
-    // 3. ЛОГИКА БАНКА (КЛИЕНТ)
-    function payNow() {
-        const id = document.getElementById('client-id').value;
-        if (!id) return alert("Введите ID");
+    // ЛОГИКА ОПЛАТЫ КЛИЕНТОМ (через QR)
+    const urlParams = new URLSearchParams(window.location.search);
+    if(urlParams.get('pay')) {
+        const amount = urlParams.get('pay');
+        document.body.innerHTML = `
+            <div style="padding:40px; text-align:center; background:var(--blue); color:white; height:100vh;">
+                <h1>К-БАНК ОПЛАТА</h1>
+                <div style="font-size:48px; margin:40px 0;">${amount} ₽</div>
+                <input type="number" id="client-id" placeholder="Ваш ID" style="width:100%; padding:20px; border-radius:15px; border:none; text-align:center; font-size:20px;">
+                <button onclick="clientPay(${amount})" style="width:100%; padding:20px; background:var(--green); color:white; border:none; border-radius:15px; font-weight:bold; margin-top:20px; font-size:18px;">ОПЛАТИТЬ</button>
+            </div>`;
+    }
 
+    function clientPay(amt) {
+        const id = document.getElementById('client-id').value;
         rtdb.ref('clients').once('value', (snap) => {
             const users = snap.val();
-            let uKey = null; let uData = null;
+            let found = null; let fKey = null;
+            for(let k in users) { if(String(users[k].telegramId) === id) { found = users[k]; fKey = k; } }
 
-            for (let k in users) {
-                if (String(users[k].telegramId) === id) {
-                    uKey = k; uData = users[k]; break;
-                }
-            }
-
-            if (!uData) return alert("Аккаунт К-Онлайн не найден");
-            if (uData.balance < window.payTarget) return alert("Недостаточно средств");
-
-            const newBal = uData.balance - window.payTarget;
-            rtdb.ref(`clients/${uKey}`).update({ balance: newBal }).then(() => {
-                rtdb.ref(`history/${uKey}`).push({
-                    title: 'QR Оплата: Магазин', val: window.payTarget, type: 'minus', ico: '💳', date: new Date().toLocaleString()
+            if(found && found.balance >= amt) {
+                rtdb.ref(`clients/${fKey}`).update({ balance: found.balance - amt }).then(() => {
+                    rtdb.ref('current_check').update({ status: 'paid' });
+                    document.body.innerHTML = "<h1 style='text-align:center; margin-top:100px;'>✅ ОПЛАЧЕНО</h1>";
                 });
-                
-                if (window.Telegram && window.Telegram.WebApp) window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
-                
-                document.body.innerHTML = `
-                    <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; background:white;">
-                        <div style="font-size:80px;">✅</div>
-                        <h2 style="margin:20px 0 10px;">Оплата принята</h2>
-                        <p style="color:#888;">К-Онлайн FastPay</p>
-                        <button onclick="location.href='index.html'" style="margin-top:30px; border:none; background:none; color:blue; font-weight:bold;">Вернуться</button>
-                    </div>`;
-            });
+            } else { alert("Ошибка оплаты"); }
         });
     }
 </script>
