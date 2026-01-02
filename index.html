@@ -3,201 +3,189 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>К-ФРЕШ POS</title>
-    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+    <title>K-FRESH POS FIX</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
     <style>
-        :root { --bg: #F2F6F9; --blue: #2a5298; --dark: #1A1A1A; --green: #27ae60; }
-        * { box-sizing: border-box; font-family: sans-serif; }
-        body { margin: 0; background: var(--bg); color: var(--dark); }
-
+        :root { --bg: #F0F4F8; --blue: #2a5298; --dark: #1A1A1A; --green: #27ae60; }
+        body { margin: 0; font-family: -apple-system, sans-serif; background: var(--bg); color: var(--dark); }
         .screen { display: none; min-height: 100vh; flex-direction: column; }
         .active { display: flex; }
 
-        /* КАССИР */
-        .pos-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 15px; padding-bottom: 220px; }
-        .product-btn { 
-            background: white; border: none; padding: 15px; border-radius: 20px; 
-            box-shadow: 0 4px 10px rgba(0,0,0,0.05); text-align: left; cursor: pointer;
+        /* Дизайн кнопок */
+        .pos-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 15px; padding-bottom: 220px; }
+        .item-btn { 
+            background: #fff; border: none; padding: 20px; border-radius: 20px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08); text-align: left; cursor: pointer;
+            -webkit-user-select: none; touch-action: manipulation;
         }
-        .product-btn:active { background: #eee; }
-        .product-btn span { font-size: 24px; display: block; }
-        .product-btn b { color: var(--blue); display: block; margin-top: 5px; }
+        .item-btn:active { background: #e0e0e0; transform: scale(0.97); }
+        .item-btn b { display: block; font-size: 18px; color: var(--blue); margin-top: 5px; }
 
-        /* ФУТЕР КАССЫ */
-        .footer { position: fixed; bottom: 0; width: 100%; background: var(--dark); padding: 20px; border-radius: 25px 25px 0 0; color: white; }
-        .btn-main { width: 100%; padding: 18px; border-radius: 15px; border: none; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 10px; }
-
-        /* ЭКРАН КЛИЕНТА */
-        .customer-area { padding: 25px; flex: 1; display: flex; flex-direction: column; }
-        .check-box { background: white; border-radius: 25px; padding: 20px; flex: 1; margin-bottom: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
-        #qrcode { background: white; padding: 10px; border-radius: 10px; margin: 15px auto; width: 150px; }
+        .footer { position: fixed; bottom: 0; width: 100%; background: var(--dark); padding: 25px; border-radius: 25px 25px 0 0; color: white; z-index: 10; }
+        .btn-pay { width: 100%; padding: 20px; border-radius: 18px; border: none; font-size: 18px; font-weight: 800; background: var(--blue); color: white; }
+        
+        #qrcode { background: white; padding: 10px; border-radius: 15px; margin: 15px auto; width: 150px; height: 150px; }
     </style>
 </head>
 <body>
 
-    <div id="screen-cashier" class="screen active">
+    <div id="scr-cashier" class="screen active">
         <div style="padding: 20px; display:flex; justify-content:space-between; align-items:center;">
             <h2 style="margin:0">К-ФРЕШ 🥗</h2>
-            <button onclick="showScreen('customer')" style="color:var(--blue); border:none; background:none; font-weight:bold;">ТАБЛО КЛИЕНТА ➡️</button>
+            <button onclick="setScreen('customer')" style="color:var(--blue); border:none; background:none; font-weight:bold;">ТАБЛО ➡️</button>
         </div>
         
-        <div class="pos-grid" id="menu-container">
-            </div>
+        <div class="pos-grid" id="grid"></div>
 
         <div class="footer">
-            <div style="display:flex; justify-content:space-between; font-size:22px; font-weight:bold;">
-                <span>Итого:</span> <span id="cashier-total">0 ₽</span>
+            <div style="display:flex; justify-content:space-between; font-size:24px; margin-bottom:15px;">
+                <span>Итого:</span> <b id="total-text">0 ₽</b>
             </div>
-            <button class="btn-main" style="background:var(--blue); color:white;" onclick="setPayStatus()">ВЫСТАВИТЬ СЧЕТ</button>
-            <button class="btn-main" style="background:#333; color:#777;" onclick="resetAll()">СБРОС</button>
+            <button class="btn-pay" onclick="goPay()">ВЫСТАВИТЬ СЧЕТ</button>
+            <div onclick="reset()" style="text-align:center; margin-top:15px; color:#666; font-size:12px;">ОЧИСТИТЬ ВСЁ</div>
         </div>
     </div>
 
-    <div id="screen-customer" class="screen">
-        <div class="customer-area">
-            <h1 onclick="showScreen('cashier')">Ваш заказ</h1>
-            <div class="check-box" id="customer-list">
-                <p style="text-align:center; opacity:0.3; margin-top:50px;">Ожидание кассира...</p>
-            </div>
-            <div style="text-align:center;">
-                <div style="font-size:40px; font-weight:900;" id="customer-total">0 ₽</div>
+    <div id="scr-customer" class="screen">
+        <div style="padding:30px; flex:1; display:flex; flex-direction:column;">
+            <h1 onclick="setScreen('cashier')">Ваш заказ</h1>
+            <div id="cust-list" style="background:white; border-radius:25px; padding:20px; flex:1; overflow-y:auto;"></div>
+            <div style="text-align:center; padding-top:20px;">
+                <div style="font-size:45px; font-weight:900;" id="cust-total">0 ₽</div>
                 <div id="qrcode"></div>
-                <p id="status-msg" style="color:var(--blue); font-weight:bold;">Оплата по QR</p>
+                <p id="hint">Ожидание выбора блюд...</p>
             </div>
         </div>
     </div>
 
-    <div id="success-overlay" style="display:none; position:fixed; inset:0; background:var(--green); z-index:999; color:white; flex-direction:column; align-items:center; justify-content:center;">
-        <div style="font-size:100px;">✅</div>
-        <h1>ОПЛАЧЕНО</h1>
-        <button class="btn-main" style="width:80%; background:white;" onclick="printCheck('FunPrint')">Чек FunPrint</button>
-        <button class="btn-main" style="width:80%; background:white;" onclick="printCheck('WalkPrint')">Чек WalkPrint</button>
-        <p onclick="resetAll()" style="margin-top:20px; cursor:pointer;">Новый заказ</p>
+    <div id="overlay-paid" style="display:none; position:fixed; inset:0; background:var(--green); z-index:100; color:white; flex-direction:column; align-items:center; justify-content:center;">
+        <h1 style="font-size:80px; margin:0;">✅</h1>
+        <h2>ОПЛАЧЕНО</h2>
+        <button onclick="print('FunPrint')" style="width:70%; padding:15px; border-radius:10px; border:none; margin:5px;">Чек FunPrint</button>
+        <button onclick="print('WalkPrint')" style="width:70%; padding:15px; border-radius:10px; border:none; margin:5px;">Чек WalkPrint</button>
+        <p onclick="reset()" style="margin-top:20px; text-decoration:underline;">Новый заказ</p>
     </div>
 
 <script>
-    const config = { databaseURL: "https://webapp-b7149-default-rtdb.europe-west1.firebasedatabase.app" };
-    firebase.initializeApp(config);
-    const rtdb = firebase.database();
+    // 1. КОНФИГ
+    const firebaseConfig = { databaseURL: "https://webapp-b7149-default-rtdb.europe-west1.firebasedatabase.app" };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
 
-    const menu = [
+    const itemsMenu = [
         {n:'Пепперони', p:650, i:'🍕'}, {n:'4 Сыра', p:720, i:'🧀'},
-        {n:'Филадельфия', p:480, i:'🍣'}, {n:'Дракон', p:550, i:'🐉'},
-        {n:'Шаурма XXL', p:320, i:'🌯'}, {n:'Бургер', p:390, i:'🍔'},
-        {n:'Фри', p:150, i:'🍟'}, {n:'Наггетсы', p:220, i:'🍗'},
-        {n:'Кофе', p:180, i:'☕'}, {n:'Кола', p:95, i:'🥤'}
+        {n:'Филадельфия', p:480, i:'🍣'}, {n:'Шаурма', p:320, i:'🌯'},
+        {n:'Бургер', p:390, i:'🍔'}, {n:'Кола', p:95, i:'🥤'}
     ];
 
-    let order = { items: [], total: 0, status: 'wait' };
+    let state = { items: [], total: 0, status: 'wait' };
 
-    // Загрузка меню
-    const container = document.getElementById('menu-container');
-    menu.forEach((item, index) => {
-        container.innerHTML += `
-            <button class="product-btn" onclick="addItem(${index})">
-                <span>${item.i}</span> ${item.n} <b>${item.p} ₽</b>
-            </button>`;
+    // 2. ОТРИСОВКА МЕНЮ
+    const grid = document.getElementById('grid');
+    itemsMenu.forEach((it, idx) => {
+        const b = document.createElement('button');
+        b.className = 'item-btn';
+        b.innerHTML = `<span>${it.i}</span> ${it.n} <b>${it.p} ₽</b>`;
+        b.onclick = () => { add(idx); }; // Явное назначение клика
+        grid.appendChild(b);
     });
 
-    function addItem(idx) {
-        const item = menu[idx];
-        order.items.push(item);
-        order.total += item.p;
-        sync();
+    // 3. ФУНКЦИИ
+    function add(idx) {
+        console.log("Нажат товар:", itemsMenu[idx].n);
+        state.items.push(itemsMenu[idx]);
+        state.total += itemsMenu[idx].p;
+        push();
     }
 
-    function sync() {
-        rtdb.ref('current_check').set(order);
+    function push() {
+        db.ref('current_check').set(state).catch(e => console.error("Ошибка Firebase:", e));
+        updateUI(state);
     }
 
-    function setPayStatus() {
-        if(order.total === 0) return;
-        order.status = 'paying';
-        sync();
+    function goPay() {
+        if(state.total === 0) return;
+        state.status = 'paying';
+        push();
     }
 
-    function resetAll() {
-        rtdb.ref('current_check').set({ items: [], total: 0, status: 'wait' }).then(() => {
-            location.reload();
-        });
+    function reset() {
+        state = { items: [], total: 0, status: 'wait' };
+        db.ref('current_check').set(state).then(() => location.reload());
     }
 
-    function showScreen(s) {
-        document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
-        document.getElementById('screen-' + s).classList.add('active');
+    function setScreen(s) {
+        document.querySelectorAll('.screen').forEach(e => e.classList.remove('active'));
+        document.getElementById('scr-' + s).classList.add('active');
     }
 
-    // Слушатель изменений
-    rtdb.ref('current_check').on('value', (snap) => {
-        const data = snap.val();
-        if(!data) return;
-        order = data; // Обновляем локальную переменную
+    function updateUI(data) {
+        // Кассир
+        document.getElementById('total-text').innerText = data.total + " ₽";
+        
+        // Покупатель
+        const list = document.getElementById('cust-list');
+        list.innerHTML = data.items.length ? data.items.map(i => `<div style="display:flex; justify-content:space-between; margin-bottom:8px;">${i.n} <span>${i.p} ₽</span></div>`).join('') : "Пусто";
+        document.getElementById('cust-total').innerText = data.total + " ₽";
 
-        // Обновляем текст на кнопках кассы
-        document.getElementById('cashier-total').innerText = data.total + " ₽";
-
-        // Обновляем табло покупателя
-        const list = document.getElementById('customer-list');
-        if(data.items && data.items.length > 0) {
-            list.innerHTML = data.items.map(i => `<div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span>${i.n}</span><b>${i.p} ₽</b></div>`).join('');
-        } else {
-            list.innerHTML = '<p style="text-align:center; opacity:0.3; margin-top:50px;">Ожидание кассира...</p>';
-        }
-        document.getElementById('customer-total').innerText = data.total + " ₽";
-
-        // QR код
-        const qrDiv = document.getElementById('qrcode');
+        // QR
+        const qr = document.getElementById('qrcode');
+        qr.innerHTML = "";
         if(data.status === 'paying') {
-            qrDiv.innerHTML = '';
             const link = window.location.href.split('?')[0] + "?pay=" + data.total;
-            new QRCode(qrDiv, { text: link, width: 150, height: 150 });
-        } else {
-            qrDiv.innerHTML = '';
+            new QRCode(qr, { text: link, width: 150, height: 150 });
+            document.getElementById('hint').innerText = "ОПЛАТИТЕ КУАР-КОДОМ";
         }
 
         // Успех
         if(data.status === 'paid') {
-            document.getElementById('success-overlay').style.display = 'flex';
+            document.getElementById('overlay-paid').style.display = 'flex';
+        }
+    }
+
+    // СЛУШАТЕЛЬ
+    db.ref('current_check').on('value', (s) => {
+        const d = s.val();
+        if(d) {
+            state = d;
+            updateUI(d);
         }
     });
 
-    // Логика печати
-    function printCheck(app) {
-        let text = "   K-FRESH\n   -------\n";
-        order.items.forEach(i => text += `${i.n} - ${i.p}р\n`);
-        text += `-------\nИТОГО: ${order.total}р\nСПАСИБО!`;
-        window.location.href = (app === 'FunPrint' ? 'funprint' : 'walkprint') + "://print?text=" + encodeURIComponent(text);
+    // ЛОГИКА ОПЛАТЫ (БАНК)
+    const url = new URLSearchParams(window.location.search);
+    if(url.get('pay')) {
+        const sum = url.get('pay');
+        document.body.innerHTML = `<div style="padding:50px; text-align:center; background:#1e3c72; color:white; height:100vh;">
+            <h2>К-БАНК</h2><h1 style="font-size:60px;">${sum} ₽</h1>
+            <input id="uid" type="number" placeholder="Ваш ID" style="width:100%; padding:20px; border-radius:15px; margin-bottom:10px; font-size:20px;">
+            <button onclick="pay(${sum})" style="width:100%; padding:20px; background:var(--green); color:white; border:none; border-radius:15px; font-size:20px; font-weight:bold;">ОПЛАТИТЬ</button>
+        </div>`;
     }
 
-    // ЛОГИКА ОПЛАТЫ (ДЛЯ КЛИЕНТА)
-    const p = new URLSearchParams(window.location.search);
-    if(p.get('pay')) {
-        const amt = p.get('pay');
-        document.body.innerHTML = `
-            <div style="padding:40px; text-align:center; background:#2a5298; color:white; height:100vh; display:flex; flex-direction:column; justify-content:center;">
-                <h2>К-ОНЛАЙН БАНК</h2>
-                <div style="font-size:60px; font-weight:900; margin:20px 0;">${amt} ₽</div>
-                <input type="number" id="id" placeholder="Ваш ID" style="width:100%; padding:20px; border-radius:15px; border:none; text-align:center; font-size:24px;">
-                <button onclick="doPay(${amt})" style="width:100%; padding:20px; background:#27ae60; color:white; border:none; border-radius:15px; font-weight:bold; margin-top:20px; font-size:20px;">ОПЛАТИТЬ</button>
-            </div>`;
-    }
-
-    function doPay(a) {
-        const id = document.getElementById('id').value;
-        rtdb.ref('clients').once('value', (s) => {
-            const us = s.val();
-            let uk = null; let ud = null;
-            for(let k in us) { if(String(us[k].telegramId) === id) { ud = us[k]; uk = k; } }
-            if(ud && ud.balance >= a) {
-                rtdb.ref(`clients/${uk}`).update({ balance: ud.balance - a }).then(() => {
-                    rtdb.ref('current_check').update({ status: 'paid' });
-                    document.body.innerHTML = "<h1 style='text-align:center; color:white; margin-top:100px;'>✅ ОПЛАЧЕНО</h1>";
+    function pay(a) {
+        const id = document.getElementById('uid').value;
+        db.ref('clients').once('value', s => {
+            const users = s.val();
+            let foundKey = null, foundData = null;
+            for(let k in users) { if(String(users[k].telegramId) === id) { foundKey = k; foundData = users[k]; } }
+            if(foundData && foundData.balance >= a) {
+                db.ref(`clients/${foundKey}`).update({ balance: foundData.balance - a }).then(() => {
+                    db.ref('current_check').update({ status: 'paid' });
+                    document.body.innerHTML = "<h1 style='color:white; text-align:center; margin-top:100px;'>✅ ОПЛАЧЕНО</h1>";
                 });
-            } else { alert("Ошибка!"); }
+            } else { alert("Ошибка баланса!"); }
         });
+    }
+
+    function print(app) {
+        let t = "K-FRESH\n-------\n";
+        state.items.forEach(i => t += i.n + " " + i.p + "р\n");
+        t += "-------\nИТОГО: " + state.total + "р\n";
+        window.location.href = (app === 'FunPrint' ? 'funprint' : 'walkprint') + "://print?text=" + encodeURIComponent(t);
     }
 </script>
 </body>
